@@ -1,6 +1,6 @@
 require("dotenv").config({ path: __dirname + "/../.env" });
 const axios = require("axios");
-const { to, formatTime } = require("./util");
+const { to } = require("./util");
 
 //Cleans up the response from Strava
 const cleanLeaderBoard = resp => {
@@ -10,10 +10,10 @@ const cleanLeaderBoard = resp => {
         const e = board[i];
         newBoard.push({
             name: e.athlete_firstname + " " + e.athlete_lastname,
-            time: e.run_time,
+            distance: e.distance,
         });
     }
-    newBoard.sort((a, b) => a.time - b.time).reverse();
+    newBoard.sort((a, b) => b.distance - a.distance);
     return newBoard;
 };
 
@@ -25,8 +25,7 @@ const getLeaderBoard = async clubId => {
             `https://www.strava.com/clubs/${clubId}/leaderboard?week_offset=1`,
             {
                 headers: {
-                    Accept:
-                        "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript",
+                    Accept: "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript",
                     "X-Requested-With": "XMLHttpRequest",
                 },
             },
@@ -42,10 +41,11 @@ const getLeaderBoard = async clubId => {
 
 // Returns "NAME h:m:s" for each entry´
 // The number of characters until time is printed is always `space_to_time`
-const formatEntry = (space_to_time, { name, time }) => {
-    return `\n${name}${Array(space_to_time - name.length)
+const formatEntry = (space_to_d, { name, distance }) => {
+    const d = Math.floor(distance / 100);
+    return `\n${name}${Array(space_to_d - name.length)
         .fill("\xa0")
-        .join("")}${formatTime(time)}`;
+        .join("")}${d / 10}${d % 10 === 0 ? ".0" : ""} km`;
 };
 
 // Translates a cleaned up leader board to a slack post
@@ -56,7 +56,7 @@ const toPost = leaderBoard => {
         Array(space_to_time - 4)
             .fill("\xa0")
             .join("") +
-        "Run time last week";
+        "Distance";
     for (i in leaderBoard) {
         post += formatEntry(space_to_time, leaderBoard[i]);
     }
