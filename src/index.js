@@ -66,7 +66,9 @@ const toPost = leaderBoard => {
     for (i in leaderBoard) {
         post += formatEntry(space_to_time, leaderBoard[i]);
     }
-    return post + "\n```";
+    return (
+        post + "\n```\nGå med via https://www.strava.com/clubs/itchalmerslop"
+    );
 };
 
 const createTables = db => {
