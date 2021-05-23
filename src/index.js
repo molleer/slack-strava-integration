@@ -1,11 +1,12 @@
 require("dotenv").config({ path: __dirname + "/../.env" });
 
 const axios = require("axios");
-const sqlite3 = require("sqlite3");
+const fs = require("fs");
 const { join } = require("path");
 const { to } = require("./util");
 
-const db = new sqlite3.Database(join(__dirname, "database"));
+//const db = new sqlite3.Database(join(__dirname, "database"));
+const db = JSON.parse(fs.readFileSync(join(__dirname, "database.json")));
 
 //Cleans up the response from Strava
 const cleanLeaderBoard = resp => {
@@ -16,7 +17,7 @@ const cleanLeaderBoard = resp => {
         newBoard.push({
             name: e.athlete_firstname + " " + e.athlete_lastname,
             distance: e.distance,
-            id: e.athlete_id,
+            id: String(e.athlete_id),
         });
     }
     newBoard.sort((a, b) => b.distance - a.distance);
@@ -71,87 +72,32 @@ const toPost = leaderBoard => {
     );
 };
 
-const createTables = db => {
-    db.run(
-        "CREATE TABLE IF NOT EXISTS users( \
-        id INT PRIMARY KEY NOT NULL, \
-        name TEXT NOT NULL\
-        )",
-    );
-
-    db.run(
-        "CREATE TABLE IF NOT EXISTS distances( \
-        user_id INT NOT NULL, \
-        distance INT, \
-        year_week TEXT NOT NULL, \
-        FOREIGN KEY(user_id) REFERENCES users(id) \
-        )",
-    );
-};
-
-const insertUsers = (db, users) => {
-    for (var i in users) {
-        db.run(
-            "INSERT INTO users(id, name) \
-        SELECT $id, $name \
-        WHERE NOT EXISTS(SELECT 1 FROM users WHERE id = $id) \
-        ",
-            {
-                $id: users[i].id,
-                $name: users[i].name,
-            },
-        );
-    }
-};
-
-const insertDistances = (db, distances) => {
-    for (var i in distances) {
-        db.run(
-            "INSERT INTO distances(user_id, distance, year_week) \
-            SELECT $id, $distance, strftime('%Y-%W') \
-            WHERE NOT EXISTS(SELECT 1 FROM distances WHERE user_id = $id AND year_week = strftime('%Y-%W'))",
-            {
-                $id: distances[i].id,
-                $distance: distances[i].distance,
-            },
-        );
-    }
-};
-
-const postToSlack = (distances, done) => {
-    axios
-        .post(`https://hooks.slack.com/services/${process.env.hook_token}`, {
-            username: "Strava",
-            icon_emoji: ":strava:",
-            text: toPost(distances),
-        })
-        .finally(done);
-};
-
-const getTotalDistances = (db, done) =>
-    db.all(
-        "SELECT name, SUM(distance) AS distance \
-    FROM distances CROSS JOIN users ON users.id=distances.user_id \
-    GROUP BY user_id \
-    ORDER BY distance DESC",
-        done,
-    );
-
-// Posts the leader board in slack
-const main = async () => {
-    db.serialize(() => {
-        createTables(db);
-        getLeaderBoard(process.env.club_id).then(users => {
-            insertUsers(db, users);
-            insertDistances(db, users);
-            getTotalDistances(db, (_, distances) =>
-                postToSlack(distances, () => {
-                    db.close();
-                    console.log("Leader board successfully posted!");
-                }),
-            );
-        });
+const postToSlack = async distances =>
+    axios.post(`https://hooks.slack.com/services/${process.env.hook_token}`, {
+        username: "Strava",
+        icon_emoji: ":strava:",
+        text: toPost(distances),
     });
+
+const insertUsers = (db, board) => {
+    for (const i in board) {
+        var distance = db[board[i].id] ? db[board[i].id].distance : 0;
+        distance += board[i].distance;
+        db[board[i].id] = { name: board[i].name, distance: distance };
+    }
+};
+
+const main = async () => {
+    const [err, board] = await to(getLeaderBoard(process.env.club_id));
+    if (err) {
+        console.log(err);
+        return;
+    }
+    insertUsers(db, board);
+    const total = Object.values(db);
+    total.sort((a, b) => b.distance - a.distance);
+    postToSlack(total);
+    fs.writeFileSync(join(__dirname, "database.json"), JSON.stringify(db));
 };
 
 main();

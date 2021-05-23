@@ -3,3 +3,4 @@ node_modules
 access_token
 refresh_token
 database
+database.json
