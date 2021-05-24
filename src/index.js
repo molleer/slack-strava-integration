@@ -58,7 +58,7 @@ const formatEntry = (space_to_d, { name, distance }) => {
 const toPost = leaderBoard => {
     const space_to_time = 20;
     let post =
-        "Total från och med 2021-18\n```Name" +
+        "Total från och med 2021 vecka 18\n```Name" +
         Array(space_to_time - 4)
             .fill("\xa0")
             .join("") +
