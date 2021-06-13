@@ -48,9 +48,11 @@ const getLeaderBoard = async clubId => {
 
 // Returns "NAME h:m:s" for each entry´
 // The number of characters until time is printed is always `space_to_time`
-const formatEntry = (space_to_d, { name, distance }) => {
+const formatEntry = (space_to_d, { name, distance }, p) => {
     const d = Math.floor(distance / 100);
-    return `\n${name}${Array(space_to_d - name.length)
+    return `\n${p + 1 + (p < 9 ? " " : "")} ${name}${Array(
+        space_to_d - name.length - 3,
+    )
         .fill("\xa0")
         .join("")}${d / 10}${d % 10 === 0 ? ".0" : ""} km`;
 };
@@ -59,13 +61,13 @@ const formatEntry = (space_to_d, { name, distance }) => {
 const toPost = leaderBoard => {
     const space_to_time = 20;
     let post =
-        "Total från och med 2021-18\n```Name" +
-        Array(space_to_time - 4)
+        "Totalt över sommaren\n```#  Name" +
+        Array(space_to_time - 7)
             .fill("\xa0")
             .join("") +
         "Distance";
     for (i in leaderBoard) {
-        post += formatEntry(space_to_time, leaderBoard[i]);
+        post += formatEntry(space_to_time, leaderBoard[i], Number(i));
     }
     return (
         post + "\n```\nGå med via https://www.strava.com/clubs/itchalmerslop"
