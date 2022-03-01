@@ -48,37 +48,62 @@ const getLeaderBoard = async clubId => {
 
 // Returns "NAME h:m:s" for each entry´
 // The number of characters until time is printed is always `space_to_time`
-const formatEntry = (space_to_d, { name, distance }, p) => {
+// positionChange No change =>, Up one position => 1, Down one position => -1
+const formatEntry = (space_to_d, { name, distance }, p, positionChange) => {
     const d = Math.floor(distance / 100);
-    return `\n${p + 1 + (p < 9 ? " " : "")} ${name}${Array(
+    const posChar = positionChange === 0 ? " " : positionChange > 0 ? "▲" : "▼";
+    return `\n${posChar} ${p + 1 + (p < 9 ? " " : "")} ${name}${Array(
         space_to_d - name.length - 3,
     )
         .fill("\xa0")
         .join("")}${d / 10}${d % 10 === 0 ? ".0" : ""} km`;
 };
 
+const getPositionChange = (leaderBoard, oldLeaderBoard) => {
+    const positionChange = [];
+    for (const i in leaderBoard) {
+        for (const k in oldLeaderBoard) {
+            if (oldLeaderBoard[k].id == leaderBoard[i].id) {
+                positionChange.push(i - k);
+                break;
+            }
+        }
+        if (positionChange.length <= i) {
+            positionChange.push(1);
+        }
+    }
+    return positionChange;
+};
+
 // Translates a cleaned up leader board to a slack post
-const toPost = leaderBoard => {
+const toPost = (leaderBoard, oldLeaderBoard) => {
     const space_to_time = 20;
     let post =
-        "Totalt 2021 LP1\n```#  Name" +
+        process.env.title +
+        "\n```  #  Name" +
         Array(space_to_time - 7)
             .fill("\xa0")
             .join("") +
         "Distance";
+    const positionChange = getPositionChange(leaderBoard, oldLeaderBoard);
     for (i in leaderBoard) {
-        post += formatEntry(space_to_time, leaderBoard[i], Number(i));
+        post += formatEntry(
+            space_to_time,
+            leaderBoard[i],
+            Number(i),
+            positionChange[i],
+        );
     }
     return (
         post + "\n```\nGå med via https://www.strava.com/clubs/itchalmerslop"
     );
 };
 
-const postToSlack = async distances =>
+const postToSlack = async (distances, oldLeaderBoard) =>
     axios.post(`https://hooks.slack.com/services/${process.env.hook_token}`, {
         username: "Strava",
         icon_emoji: ":strava:",
-        text: toPost(distances),
+        text: toPost(distances, oldLeaderBoard),
     });
 
 const insertUsers = (db, board) => {
@@ -89,16 +114,28 @@ const insertUsers = (db, board) => {
     }
 };
 
+const toArray = board => {
+    const arr = [];
+    for (const i in board) {
+        arr.push({ ...board[i], id: i });
+    }
+    return arr;
+};
+
 const main = async () => {
     const [err, board] = await to(getLeaderBoard(process.env.club_id));
     if (err) {
         console.log(err);
         return;
     }
+    const oldLeaderBoard = toArray(db);
     insertUsers(db, board);
-    const total = Object.values(db);
-    total.sort((a, b) => b.distance - a.distance);
-    postToSlack(total);
+    const newLeaderBoard = toArray(db);
+
+    oldLeaderBoard.sort((a, b) => b.distance - a.distance);
+    newLeaderBoard.sort((a, b) => b.distance - a.distance);
+
+    postToSlack(newLeaderBoard, oldLeaderBoard);
     fs.writeFileSync(join(__dirname, "database.json"), JSON.stringify(db));
 };
 
