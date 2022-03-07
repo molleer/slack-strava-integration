@@ -51,7 +51,7 @@ const getLeaderBoard = async clubId => {
 // positionChange No change =>, Up one position => 1, Down one position => -1
 const formatEntry = (space_to_d, { name, distance }, p, positionChange) => {
     const d = Math.floor(distance / 100);
-    const posChar = positionChange === 0 ? " " : positionChange > 0 ? "▲" : "▼";
+    const posChar = positionChange === 0 ? " " : positionChange < 0 ? "▲" : "▼";
     return `\n${posChar} ${p + 1 + (p < 9 ? " " : "")} ${name}${Array(
         space_to_d - name.length - 3,
     )
@@ -69,7 +69,7 @@ const getPositionChange = (leaderBoard, oldLeaderBoard) => {
             }
         }
         if (positionChange.length <= i) {
-            positionChange.push(1);
+            positionChange.push(-1);
         }
     }
     return positionChange;
