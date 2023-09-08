@@ -98,6 +98,7 @@ const athleteRanks = (leaderBoard) => {
 //   in the same place, and +1 means moving up the leaderboard.
 // - name: the name of the athlete, to be printed in the table.
 // - distance: the total distance the athlete has run.
+// - diff: the difference in distance between the new and old leaderboard.
 const tableEntries = (newLeaderBoard, oldLeaderBoard) => {
     const newRanks = athleteRanks(newLeaderBoard);
     const oldRanks = athleteRanks(oldLeaderBoard);
@@ -117,11 +118,16 @@ const tableEntries = (newLeaderBoard, oldLeaderBoard) => {
             rankChange = -1;
         }
 
+        const newDistance = athlete.distance;
+        const oldDistance = id in oldLeaderBoard ? oldLeaderBoard[id].distance : 0;
+        const diff = newDistance - oldDistance;
+
         entries.push({
             rankChange: rankChange,
             rank: newRank,
             name: athlete.name,
-            distance: athlete.distance,
+            distance: newDistance,
+            diff: diff,
         })
     }
     // Sort the entries in ascending order by rank.
@@ -149,6 +155,7 @@ const formatEntry = (entry) => {
         rank: entry.rank.toString(),
         name: entry.name,
         distance: `${(entry.distance / 1000).toFixed(1)} km`,
+        diff: `(+${(entry.diff / 1000).toFixed(1)} km)`,
     }
 }
 
@@ -160,6 +167,7 @@ const formatTable = (newLeaderBoard, oldLeaderBoard) => {
         "#", // Rank.
         "Name",
         "Distance",
+        " ", // Diff.
     ]];
     for (const e of tableEntries(newLeaderBoard, oldLeaderBoard).map(formatEntry)) {
         rows.push([
@@ -167,6 +175,7 @@ const formatTable = (newLeaderBoard, oldLeaderBoard) => {
             e.rank,
             e.name,
             e.distance,
+            e.diff,
         ]);
     }
     const config = {
@@ -175,6 +184,7 @@ const formatTable = (newLeaderBoard, oldLeaderBoard) => {
             { alignment: "right" },  // Rank.
             { alignment: "left" },  // Name.
             { alignment: "right" },  // Distance.
+            { alignment: "right" },  // Diff.
         ],
         // Taken from the documentation for a borderless table:
         // https://github.com/gajus/table/tree/28e8e6e1354ba4b7fecad2f1aa50015c8a781704#borderless-table
