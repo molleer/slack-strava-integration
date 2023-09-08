@@ -2,10 +2,10 @@ require("dotenv").config({ path: __dirname + "/../.env" });
 
 const axios = require("axios");
 const fs = require("fs");
+const { table, getBorderCharacters } = require("table");
 const { join } = require("path");
 const { to } = require("./util");
 
-//const db = new sqlite3.Database(join(__dirname, "database"));
 const db = JSON.parse(fs.readFileSync(join(__dirname, "database.json")));
 
 //Cleans up the response from Strava
@@ -46,64 +46,22 @@ const getLeaderBoard = async clubId => {
     return cleanLeaderBoard(res);
 };
 
-// Returns "NAME h:m:s" for each entry´
-// The number of characters until time is printed is always `space_to_time`
-// positionChange No change =>, Up one position => 1, Down one position => -1
-const formatEntry = (space_to_d, { name, distance }, p, positionChange) => {
-    const d = Math.floor(distance / 100);
-    const posChar = positionChange === 0 ? " " : positionChange < 0 ? "▲" : "▼";
-    return `\n${posChar} ${p + 1 + (p < 9 ? " " : "")} ${name}${Array(
-        space_to_d - name.length - 3,
-    )
-        .fill("\xa0")
-        .join("")}${d / 10}${d % 10 === 0 ? ".0" : ""} km`;
-};
-
-const getPositionChange = (leaderBoard, oldLeaderBoard) => {
-    const positionChange = [];
-    for (const i in leaderBoard) {
-        for (const k in oldLeaderBoard) {
-            if (oldLeaderBoard[k].id == leaderBoard[i].id) {
-                positionChange.push(i - k);
-                break;
-            }
-        }
-        if (positionChange.length <= i) {
-            positionChange.push(-1);
-        }
-    }
-    return positionChange;
-};
-
 // Translates a cleaned up leader board to a slack post
-const toPost = (leaderBoard, oldLeaderBoard) => {
-    const space_to_time = 20;
-    let post =
-        process.env.title +
-        "\n```  #  Name" +
-        Array(space_to_time - 7)
-            .fill("\xa0")
-            .join("") +
-        "Distance";
-    const positionChange = getPositionChange(leaderBoard, oldLeaderBoard);
-    for (i in leaderBoard) {
-        post += formatEntry(
-            space_to_time,
-            leaderBoard[i],
-            Number(i),
-            positionChange[i],
-        );
-    }
-    return (
-        post + "\n```\nGå med via https://www.strava.com/clubs/itchalmerslop"
-    );
+const toPost = (newLeaderBoard, oldLeaderBoard) => {
+    return [
+        process.env.title,
+        "```",
+        formatTable(newLeaderBoard, oldLeaderBoard),
+        "```",
+        "Gå med via https://www.strava.com/clubs/itchalmerslop",
+    ].join("\n");
 };
 
-const postToSlack = async (distances, oldLeaderBoard) =>
+const postToSlack = async (newLeaderBoard, oldLeaderBoard) =>
     axios.post(`https://hooks.slack.com/services/${process.env.hook_token}`, {
         username: "Strava",
         icon_emoji: ":strava:",
-        text: toPost(distances, oldLeaderBoard),
+        text: toPost(newLeaderBoard, oldLeaderBoard),
     });
 
 const insertUsers = (db, board) => {
@@ -114,13 +72,122 @@ const insertUsers = (db, board) => {
     }
 };
 
-const toArray = board => {
-    const arr = [];
-    for (const i in board) {
-        arr.push({ ...board[i], id: i });
+// Takes a leaderboard object and returns a mapping from athlete ID to the rank,
+// based on distance, on the leaderboard. The athlete with the largest distance
+// will have rank 1; the athlete with the second largest distance will have rank
+// 2; and so on.
+const athleteRanks = (leaderBoard) => {
+    let athletes = [];
+    for (const id in leaderBoard) {
+        athletes.push({ id: id, distance: leaderBoard[id].distance });
     }
-    return arr;
+    athletes.sort((a, b) => b.distance - a.distance);
+    let ranks = {};
+    for (const [i, athlete] of athletes.entries()) {
+        // i is a 0-based index, and we want 1-based ranks.
+        ranks[athlete.id] = i + 1;
+    }
+    return ranks;
 };
+
+// Constructs an array of objects containing one entry for each athlete in the
+// new leaderboard. Each entry contains these properties:
+// - rank: the leaderboard rank. 1 is the best possible rank (i.e. top of leaderboard).
+// - rankChange: a number representing whether their rank has changed compared
+//   to the old leaderboard. -1 means moving down the leaderboard, 0 means staying
+//   in the same place, and +1 means moving up the leaderboard.
+// - name: the name of the athlete, to be printed in the table.
+// - distance: the total distance the athlete has run.
+const tableEntries = (newLeaderBoard, oldLeaderBoard) => {
+    const newRanks = athleteRanks(newLeaderBoard);
+    const oldRanks = athleteRanks(oldLeaderBoard);
+    // A sentinel value for indicating that an athlete didn't have a rank
+    // previously. By defining it this way we can guarantee that whatever rank
+    // the athlete has now, noPreviousRank will be higher (i.e. worse).
+    const noPreviousRank = Object.keys(newRanks).length + 1;
+
+    let entries = [];
+    for (const [id, athlete] of Object.entries(newLeaderBoard)) {
+        const newRank = newRanks[id];
+        const oldRank = id in oldRanks ? oldRanks[id] : noPreviousRank;
+        let rankChange = 0; // Assume no change.
+        if (newRank < oldRank) { // Lower rank is better.
+            rankChange = +1;
+        } else if (newRank > oldRank) { // Higher rank is worse.
+            rankChange = -1;
+        }
+
+        entries.push({
+            rankChange: rankChange,
+            rank: newRank,
+            name: athlete.name,
+            distance: athlete.distance,
+        })
+    }
+    // Sort the entries in ascending order by rank.
+    entries.sort((a, b) => a.rank - b.rank);
+    return entries;
+};
+
+// Takes an entry created by the tableEntries function and maps each property to
+// a suitable string representation.
+const formatEntry = (entry) => {
+    let rankChange = "";
+    switch (entry.rankChange) {
+        case -1:
+            rankChange = "▼";
+            break;
+        case 0:
+            rankChange = " ";
+            break;
+        case +1:
+            rankChange = "▲";
+            break;
+    }
+    return {
+        rankChange: rankChange,
+        rank: entry.rank.toString(),
+        name: entry.name,
+        distance: `${(entry.distance / 1000).toFixed(1)} km`,
+    }
+}
+
+// Takes old and new leaderboards and returns a neatly formatted ASCII table
+// suitable for posting to the Slack channel.
+const formatTable = (newLeaderBoard, oldLeaderBoard) => {
+    let rows = [[
+        " ", // Rank change.
+        "#", // Rank.
+        "Name",
+        "Distance",
+    ]];
+    for (const e of tableEntries(newLeaderBoard, oldLeaderBoard).map(formatEntry)) {
+        rows.push([
+            e.rankChange,
+            e.rank,
+            e.name,
+            e.distance,
+        ]);
+    }
+    const config = {
+        columns: [
+            { alignment: "left" },  // Rank change.
+            { alignment: "right" },  // Rank.
+            { alignment: "left" },  // Name.
+            { alignment: "right" },  // Distance.
+        ],
+        // Taken from the documentation for a borderless table:
+        // https://github.com/gajus/table/tree/28e8e6e1354ba4b7fecad2f1aa50015c8a781704#borderless-table
+        border: getBorderCharacters('void'),
+        columnDefault: {
+            paddingLeft: 0,
+            paddingRight: 1
+        },
+        drawHorizontalLine: () => false,
+        singleLine: true,
+    };
+    return table(rows, config);
+}
 
 const main = async () => {
     const [err, board] = await to(getLeaderBoard(process.env.club_id));
@@ -128,15 +195,11 @@ const main = async () => {
         console.log(err);
         return;
     }
-    const oldLeaderBoard = toArray(db);
-    insertUsers(db, board);
-    const newLeaderBoard = toArray(db);
-
-    oldLeaderBoard.sort((a, b) => b.distance - a.distance);
-    newLeaderBoard.sort((a, b) => b.distance - a.distance);
-
+    const oldLeaderBoard = { ...db };
+    const newLeaderBoard = { ...db };
+    insertUsers(newLeaderBoard, board);
     postToSlack(newLeaderBoard, oldLeaderBoard);
-    fs.writeFileSync(join(__dirname, "database.json"), JSON.stringify(db));
+    fs.writeFileSync(join(__dirname, "database.json"), JSON.stringify(newLeaderBoard));
 };
 
 main();
