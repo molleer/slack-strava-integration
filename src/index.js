@@ -150,13 +150,19 @@ const formatEntry = (entry) => {
             rankChange = "▲";
             break;
     }
-    return {
+    let formatted = {
         rankChange: rankChange,
         rank: entry.rank.toString(),
         name: entry.name,
         distance: `${(entry.distance / 1000).toFixed(1)} km`,
         diff: `(+${(entry.diff / 1000).toFixed(1)} km)`,
+    };
+    // If the diff is small enough, we avoid including "(+0.0 km)" in the output
+    // as that is just noisy.
+    if (Math.abs(entry.diff) < 10) {
+        formatted.diff = "";
     }
+    return formatted;
 }
 
 // Takes old and new leaderboards and returns a neatly formatted ASCII table
