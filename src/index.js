@@ -5,6 +5,7 @@ const fs = require("fs");
 const { table, getBorderCharacters } = require("table");
 const { join } = require("path");
 const { to } = require("./util");
+const { time } = require("console");
 
 const db = JSON.parse(fs.readFileSync(join(__dirname, "database.json")));
 
@@ -76,7 +77,7 @@ const insertUsers = (db, board) => {
 // based on distance, on the leaderboard. The athlete with the largest distance
 // will have rank 1; the athlete with the second largest distance will have rank
 // 2; and so on.
-const athleteRanks = (leaderBoard) => {
+const athleteRanks = leaderBoard => {
     let athletes = [];
     for (const id in leaderBoard) {
         athletes.push({ id: id, distance: leaderBoard[id].distance });
@@ -112,14 +113,17 @@ const tableEntries = (newLeaderBoard, oldLeaderBoard) => {
         const newRank = newRanks[id];
         const oldRank = id in oldRanks ? oldRanks[id] : noPreviousRank;
         let rankChange = 0; // Assume no change.
-        if (newRank < oldRank) { // Lower rank is better.
+        if (newRank < oldRank) {
+            // Lower rank is better.
             rankChange = +1;
-        } else if (newRank > oldRank) { // Higher rank is worse.
+        } else if (newRank > oldRank) {
+            // Higher rank is worse.
             rankChange = -1;
         }
 
         const newDistance = athlete.distance;
-        const oldDistance = id in oldLeaderBoard ? oldLeaderBoard[id].distance : 0;
+        const oldDistance =
+            id in oldLeaderBoard ? oldLeaderBoard[id].distance : 0;
         const diff = newDistance - oldDistance;
 
         entries.push({
@@ -128,7 +132,7 @@ const tableEntries = (newLeaderBoard, oldLeaderBoard) => {
             name: athlete.name,
             distance: newDistance,
             diff: diff,
-        })
+        });
     }
     // Sort the entries in ascending order by rank.
     entries.sort((a, b) => a.rank - b.rank);
@@ -137,7 +141,7 @@ const tableEntries = (newLeaderBoard, oldLeaderBoard) => {
 
 // Takes an entry created by the tableEntries function and maps each property to
 // a suitable string representation.
-const formatEntry = (entry) => {
+const formatEntry = entry => {
     let rankChange = "";
     switch (entry.rankChange) {
         case -1:
@@ -163,47 +167,45 @@ const formatEntry = (entry) => {
         formatted.diff = "";
     }
     return formatted;
-}
+};
 
 // Takes old and new leaderboards and returns a neatly formatted ASCII table
 // suitable for posting to the Slack channel.
 const formatTable = (newLeaderBoard, oldLeaderBoard) => {
-    let rows = [[
-        " ", // Rank change.
-        "#", // Rank.
-        "Name",
-        "Distance",
-        " ", // Diff.
-    ]];
-    for (const e of tableEntries(newLeaderBoard, oldLeaderBoard).map(formatEntry)) {
-        rows.push([
-            e.rankChange,
-            e.rank,
-            e.name,
-            e.distance,
-            e.diff,
-        ]);
+    let rows = [
+        [
+            " ", // Rank change.
+            "#", // Rank.
+            "Name",
+            "Distance",
+            " ", // Diff.
+        ],
+    ];
+    for (const e of tableEntries(newLeaderBoard, oldLeaderBoard).map(
+        formatEntry,
+    )) {
+        rows.push([e.rankChange, e.rank, e.name, e.distance, e.diff]);
     }
     const config = {
         columns: [
-            { alignment: "left" },  // Rank change.
-            { alignment: "right" },  // Rank.
-            { alignment: "left" },  // Name.
-            { alignment: "right" },  // Distance.
-            { alignment: "right" },  // Diff.
+            { alignment: "left" }, // Rank change.
+            { alignment: "right" }, // Rank.
+            { alignment: "left" }, // Name.
+            { alignment: "right" }, // Distance.
+            { alignment: "right" }, // Diff.
         ],
         // Taken from the documentation for a borderless table:
         // https://github.com/gajus/table/tree/28e8e6e1354ba4b7fecad2f1aa50015c8a781704#borderless-table
-        border: getBorderCharacters('void'),
+        border: getBorderCharacters("void"),
         columnDefault: {
             paddingLeft: 0,
-            paddingRight: 1
+            paddingRight: 1,
         },
         drawHorizontalLine: () => false,
         singleLine: true,
     };
     return table(rows, config);
-}
+};
 
 const main = async () => {
     const [err, board] = await to(getLeaderBoard(process.env.club_id));
@@ -215,7 +217,31 @@ const main = async () => {
     const newLeaderBoard = { ...db };
     insertUsers(newLeaderBoard, board);
     postToSlack(newLeaderBoard, oldLeaderBoard);
-    fs.writeFileSync(join(__dirname, "database.json"), JSON.stringify(newLeaderBoard));
+    fs.writeFileSync(
+        join(__dirname, "database.json"),
+        JSON.stringify(newLeaderBoard),
+    );
+
+    const res = await axios.get("https://lasvecka.nu/data");
+    if (res.data == "LV 1") {
+        const database = JSON.parse(
+            fs.readFileSync(join(__dirname, "database.json")),
+        );
+        fs.writeFileSync(
+            join(__dirname, "old.database.json"),
+            JSON.stringify(database),
+        );
+        fs.writeFileSync(join(__dirname, "database.json"), "{}");
+        await new Promise(r => setTimeout(r, 1000));
+        axios.post(
+            `https://hooks.slack.com/services/${process.env.hook_token}`,
+            {
+                username: "Strava",
+                icon_emoji: ":strava:",
+                text: "Det var sista listan för den här läsperioden! :partying_face: \nNu börjar listan om från noll!",
+            },
+        );
+    }
 };
 
 main();
