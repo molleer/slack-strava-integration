@@ -158,8 +158,8 @@ const formatEntry = entry => {
         rankChange: rankChange,
         rank: entry.rank.toString(),
         name: entry.name,
-        distance: `${(entry.distance / 1000).toFixed(1)} km`,
-        diff: `(+${(entry.diff / 1000).toFixed(1)} km)`,
+        distance: `${(entry.distance / 1000).toFixed(1)} `,
+        diff: `(+${(entry.diff / 1000).toFixed(1)})`,
     };
     // If the diff is small enough, we avoid including "(+0.0 km)" in the output
     // as that is just noisy.
@@ -174,11 +174,11 @@ const formatEntry = entry => {
 const formatTable = (newLeaderBoard, oldLeaderBoard) => {
     let rows = [
         [
-            " ", // Rank change.
+            "", // Rank change.
             "#", // Rank.
             "Name",
-            "Distance",
-            " ", // Diff.
+            "Dist",
+            "[km]", // Diff.
         ],
     ];
     for (const e of tableEntries(newLeaderBoard, oldLeaderBoard).map(
@@ -192,7 +192,7 @@ const formatTable = (newLeaderBoard, oldLeaderBoard) => {
             { alignment: "right" }, // Rank.
             { alignment: "left" }, // Name.
             { alignment: "right" }, // Distance.
-            { alignment: "right" }, // Diff.
+            { alignment: "left" }, // Diff.
         ],
         // Taken from the documentation for a borderless table:
         // https://github.com/gajus/table/tree/28e8e6e1354ba4b7fecad2f1aa50015c8a781704#borderless-table
