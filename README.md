@@ -4,19 +4,20 @@ A script for posting a leaderboard, fetched from Strava, to a dedicated Slack ch
 
 ## Contributors
 
-- [@molleer](https://github.com/molleer) David 'Mölle' Möller
-- [@saser](https://github.com/saser) Christian 'Saser' Persson
+-   [@molleer](https://github.com/molleer) David 'Mölle' Möller
+-   [@saser](https://github.com/saser) Christian 'Saser' Persson
 
 ## Requirements
 
-- [NodeJs](https://nodejs.org/en/)
-- [npm](https://www.npmjs.com/)
+-   [NodeJs](https://nodejs.org/en/)
+-   [npm](https://www.npmjs.com/)
 
 # Setup
 
 1. Copy the `example.env` file to `.env`.
 2. In `.env`, set the `club_id` to the desired Strava club id (ex: `itchalmerslop`) and set the `hook_token` to a Slack incoming web hook token to be used (could also print to command line while developing).
 3. Install dependencies with
+
 ```bash
 npm install
 ```
@@ -24,6 +25,6 @@ npm install
 Run the script with
 
 ```bash
-node index.js
+node src/refresh_tokens.js # Creates/Refreshes tokens.json
+node src/index.js          # Posts to slack
 ```
-

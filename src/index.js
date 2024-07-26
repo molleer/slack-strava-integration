@@ -5,7 +5,7 @@ const fs = require("fs");
 const { table, getBorderCharacters } = require("table");
 const { join } = require("path");
 const { to } = require("./util");
-const { time } = require("console");
+const tokens = require("./tokens.json");
 
 const db = JSON.parse(fs.readFileSync(join(__dirname, "database.json")));
 
@@ -35,6 +35,7 @@ const getLeaderBoard = async clubId => {
                 headers: {
                     Accept: "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript",
                     "X-Requested-With": "XMLHttpRequest",
+                    Authorization: `Bearer ${tokens.access_token}`,
                 },
             },
         ),
