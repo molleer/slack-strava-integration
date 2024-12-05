@@ -9,7 +9,7 @@ const env_refresh_token = process.env.refresh_token;
 const client_id = process.env.client_id;
 const client_secret = process.env.client_secret;
 
-const main = async () => {
+const refresh_tokens = async () => {
     if (!fs.existsSync(tokens_path)) {
         fs.writeFileSync(
             tokens_path,
@@ -42,6 +42,10 @@ const main = async () => {
     );
 };
 
-main()
-    .then(() => console.log("Done!"))
-    .catch(err => console.log(err));
+if (typeof require !== "undefined" && require.main === module) {
+    refresh_tokens()
+        .then(() => console.log("Done!"))
+        .catch(err => console.log(err));
+}
+
+module.exports = refresh_tokens;

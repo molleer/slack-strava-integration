@@ -5,9 +5,32 @@ const fs = require("fs");
 const { table, getBorderCharacters } = require("table");
 const { join } = require("path");
 const { to } = require("./util");
-const tokens = require("./tokens.json");
-
+const refresh_token = require("./refresh_tokens.js");
 const db = JSON.parse(fs.readFileSync(join(__dirname, "database.json")));
+
+const getTokens = () => {
+    const tokens_path = join(__dirname, "tokens.json");
+
+    if (!fs.existsSync(tokens_path)) {
+        console.log("Token file not found:", tokens_path);
+        exit(1);
+    }
+
+    try {
+        return JSON.parse(fs.readFileSync(tokens_path));
+    } catch {
+        fs.unlinkSync(tokens_path);
+        refresh_token()
+            .then(() => console.log("Token refreshed!"))
+            .catch(error => {
+                console.log(error);
+                throw "Unable to refresh token!";
+            });
+    }
+    return {};
+};
+
+const tokens = getTokens();
 
 //Cleans up the response from Strava
 const cleanLeaderBoard = resp => {
